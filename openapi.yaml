@@ -1,0 +1,263 @@
+openapi: 3.0.3
+info:
+  title: GitHub Repository Scoring API
+  description: Search and score GitHub repositories by popularity (stars, forks, recency)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+tags:
+  - name: github-repos
+    description: GitHub repository search and scoring
+
+paths:
+  /github-repos/search:
+    get:
+      tags:
+        - github-repos
+      summary: Search and score GitHub repositories
+      description: >
+        Returns a paginated list of GitHub repositories matching the given filters,
+        each enriched with a popularity score (0–100) based on stars, forks, and
+        recency of the last update.
+      operationId: searchRepositories
+      parameters:
+        - name: language
+          in: query
+          required: false
+          description: Filter repositories by programming language (case-insensitive)
+          schema:
+            type: string
+            example: TypeScript
+        - name: created_after
+          in: query
+          required: false
+          description: Only include repositories created after this date (ISO 8601)
+          schema:
+            type: string
+            format: date
+            example: '2020-01-01'
+        - name: page
+          in: query
+          required: false
+          description: Page number (1-based)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: per_page
+          in: query
+          required: false
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 10
+      responses:
+        '200':
+          description: Paginated list of scored repositories, sorted by popularity score descending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRepositoriesResponse'
+              example:
+                items:
+                  - id: 10270250
+                    fullName: nestjs/nest
+                    description: A progressive Node.js framework for building efficient and scalable server-side applications
+                    language: TypeScript
+                    stars: 68000
+                    forks: 7600
+                    createdAt: '2017-02-04T00:00:00.000Z'
+                    updatedAt: '2026-03-30T00:00:00.000Z'
+                    htmlUrl: https://github.com/nestjs/nest
+                    score: 82
+                    breakdown:
+                      starsScore: 71.2
+                      forksScore: 55.8
+                      recencyScore: 98.6
+                meta:
+                  total: 3
+                  page: 1
+                  perPage: 10
+                  totalPages: 1
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+              example:
+                statusCode: 400
+                message:
+                  - page must not be less than 1
+                  - per_page must not be greater than 100
+                error: Bad Request
+
+components:
+  schemas:
+    ScoreBreakdown:
+      type: object
+      required:
+        - starsScore
+        - forksScore
+        - recencyScore
+      properties:
+        starsScore:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Contribution from stars (log-scaled, 0–100)
+          example: 71.2
+        forksScore:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Contribution from forks (log-scaled, 0–100)
+          example: 55.8
+        recencyScore:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Contribution from recency of last update (linear decay over 2 years, 0–100)
+          example: 98.6
+
+    RepositoryResponse:
+      type: object
+      required:
+        - id
+        - fullName
+        - description
+        - language
+        - stars
+        - forks
+        - createdAt
+        - updatedAt
+        - htmlUrl
+        - score
+        - breakdown
+      properties:
+        id:
+          type: integer
+          description: GitHub repository ID
+          example: 10270250
+        fullName:
+          type: string
+          description: Repository full name in owner/name format
+          example: nestjs/nest
+        description:
+          type: string
+          nullable: true
+          description: Repository description
+          example: A progressive Node.js framework
+        language:
+          type: string
+          nullable: true
+          description: Primary programming language
+          example: TypeScript
+        stars:
+          type: integer
+          minimum: 0
+          description: Number of stars
+          example: 68000
+        forks:
+          type: integer
+          minimum: 0
+          description: Number of forks
+          example: 7600
+        createdAt:
+          type: string
+          format: date-time
+          description: Repository creation timestamp (ISO 8601)
+          example: '2017-02-04T00:00:00.000Z'
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp of the last push (ISO 8601)
+          example: '2026-03-30T00:00:00.000Z'
+        htmlUrl:
+          type: string
+          format: uri
+          description: URL to the repository on GitHub
+          example: https://github.com/nestjs/nest
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Popularity score (0–100), average of stars, forks, and recency sub-scores
+          example: 82
+        breakdown:
+          $ref: '#/components/schemas/ScoreBreakdown'
+
+    PaginationMeta:
+      type: object
+      required:
+        - total
+        - page
+        - perPage
+        - totalPages
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          description: Total number of matching repositories
+          example: 8
+        page:
+          type: integer
+          minimum: 1
+          description: Current page number
+          example: 1
+        perPage:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: Items per page
+          example: 10
+        totalPages:
+          type: integer
+          minimum: 0
+          description: Total number of pages
+          example: 1
+
+    PaginatedRepositoriesResponse:
+      type: object
+      required:
+        - items
+        - meta
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RepositoryResponse'
+          description: Repositories sorted by score descending
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    ValidationErrorResponse:
+      type: object
+      required:
+        - statusCode
+        - message
+        - error
+      properties:
+        statusCode:
+          type: integer
+          example: 400
+        message:
+          type: array
+          items:
+            type: string
+          description: List of validation error messages
+          example:
+            - page must not be less than 1
+        error:
+          type: string
+          example: Bad Request
