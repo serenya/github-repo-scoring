@@ -1,22 +1,19 @@
 import { ScoringService } from './scoring.service';
-import { Repository } from '../entities/repository.entity';
+import { GitHubRepo } from '../entities/github-repo.entity';
 
 const NOW = new Date('2026-04-05T00:00:00.000Z');
 
-function makeRepo(overrides: Partial<ConstructorParameters<typeof Repository>[0] extends never ? never : {
-  id: number; fullName: string; description: string | null; language: string | null;
-  stars: number; forks: number; createdAt: Date; updatedAt: Date; htmlUrl: string;
-}>): Repository {
-  return new Repository(
-    (overrides as any).id ?? 1,
-    (overrides as any).fullName ?? 'owner/repo',
-    (overrides as any).description ?? null,
-    (overrides as any).language ?? null,
-    (overrides as any).stars ?? 0,
-    (overrides as any).forks ?? 0,
-    (overrides as any).createdAt ?? new Date('2020-01-01'),
-    (overrides as any).updatedAt ?? NOW,
-    (overrides as any).htmlUrl ?? 'https://github.com/owner/repo',
+function makeRepo(overrides: Partial<GitHubRepo> = {}): GitHubRepo {
+  return new GitHubRepo(
+    overrides.id ?? 1,
+    overrides.fullName ?? 'owner/repo',
+    overrides.description ?? null,
+    overrides.language ?? null,
+    overrides.stars ?? 0,
+    overrides.forks ?? 0,
+    overrides.createdAt ?? new Date('2020-01-01'),
+    overrides.updatedAt ?? NOW,
+    overrides.htmlUrl ?? 'https://github.com/owner/repo',
   );
 }
 

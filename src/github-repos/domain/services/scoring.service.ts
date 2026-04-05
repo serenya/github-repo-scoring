@@ -1,5 +1,5 @@
-import { IRepository } from '../entities/repository.entity';
-import { IScoredRepository, ScoredRepository } from '../entities/scored-repository.entity';
+import { GitHubRepo } from '../entities/github-repo.entity';
+import { ScoredGitHubRepo } from '../entities/scored-github-repo.entity';
 import { ScoreBreakdown } from '../value-objects/score-breakdown.vo';
 
 const MAX_STARS_REFERENCE = 100_000;
@@ -7,14 +7,14 @@ const MAX_FORKS_REFERENCE = 50_000;
 const MAX_STALE_DAYS = 730; // 2 years
 
 export class ScoringService {
-  computeScore(repo: IRepository, now: Date = new Date()): IScoredRepository {
+  computeScore(repo: GitHubRepo, now: Date = new Date()): ScoredGitHubRepo {
     const starsScore = this.computeStarsScore(repo.stars);
     const forksScore = this.computeForksScore(repo.forks);
     const recencyScore = this.computeRecencyScore(repo.updatedAt, now);
 
     const score = Math.round((starsScore + forksScore + recencyScore) / 3);
 
-    return new ScoredRepository(repo, score, new ScoreBreakdown(starsScore, forksScore, recencyScore));
+    return new ScoredGitHubRepo(repo, score, new ScoreBreakdown(starsScore, forksScore, recencyScore));
   }
 
   private computeStarsScore(stars: number): number {

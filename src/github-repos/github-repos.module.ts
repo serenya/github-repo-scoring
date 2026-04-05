@@ -1,17 +1,17 @@
 import { Module } from '@nestjs/common';
-import { GithubReposController } from './github-repos.controller';
-import { SearchRepositoriesUseCase } from './application/use-cases/search-repositories.use-case';
-import { GITHUB_REPOSITORY_PORT } from './application/ports/github-repository.port';
-import { GithubStubAdapter } from './infrastructure/adapters/github-stub.adapter';
+import { GitHubReposController } from './github-repos.controller';
+import { SearchGitHubReposUseCase } from './application/use-cases/search-github-repos.use-case';
+import { GITHUB_PORT } from './application/ports/github.port';
+import { GitHubApiAdapter } from './infrastructure/adapters/github-api.adapter';
 
 @Module({
-  controllers: [GithubReposController],
+  controllers: [GitHubReposController],
   providers: [
-    SearchRepositoriesUseCase,
+    SearchGitHubReposUseCase,
     {
-      provide: GITHUB_REPOSITORY_PORT,
-      useClass: GithubStubAdapter,
+      provide: GITHUB_PORT,
+      useClass: GitHubApiAdapter,
     },
   ],
 })
-export class GithubReposModule {}
+export class GitHubReposModule {}

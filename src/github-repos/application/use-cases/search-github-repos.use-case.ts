@@ -1,21 +1,21 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { GITHUB_REPOSITORY_PORT } from '../ports/github-repository.port';
-import type { IGithubRepositoryPort } from '../ports/github-repository.port';
-import { SearchRepositoriesInput, SearchRepositoriesOutput } from '../dtos/search-repositories.dto';
-import { RepositoryFilter } from '../../domain/value-objects/repository-filter.vo';
+import { GITHUB_PORT } from '../ports/github.port';
+import type { GitHubPort } from '../ports/github.port';
+import { SearchGitHubReposInput, SearchGitHubReposOutput } from '../dtos/search-github-repos.dto';
+import { GitHubRepoFilter } from '../../domain/value-objects/github-repo-filter.vo';
 import { ScoringService } from '../../domain/services/scoring.service';
 
 @Injectable()
-export class SearchRepositoriesUseCase {
+export class SearchGitHubReposUseCase {
   private readonly scoringService = new ScoringService();
 
   constructor(
-    @Inject(GITHUB_REPOSITORY_PORT)
-    private readonly repoPort: IGithubRepositoryPort,
+    @Inject(GITHUB_PORT)
+    private readonly repoPort: GitHubPort,
   ) {}
 
-  async execute(input: SearchRepositoriesInput): Promise<SearchRepositoriesOutput> {
-    const filter = new RepositoryFilter(
+  async execute(input: SearchGitHubReposInput): Promise<SearchGitHubReposOutput> {
+    const filter = new GitHubRepoFilter(
       input.language,
       input.createdAfter,
       input.page,

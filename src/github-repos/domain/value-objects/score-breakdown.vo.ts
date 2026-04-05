@@ -1,10 +1,4 @@
-export interface IScoreBreakdown {
-  starsScore: number;
-  forksScore: number;
-  recencyScore: number;
-}
-
-export class ScoreBreakdown implements IScoreBreakdown {
+export class ScoreBreakdown {
   constructor(
     public readonly starsScore: number,
     public readonly forksScore: number,

@@ -3,14 +3,50 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
+import { GITHUB_PORT, GitHubPort, PaginatedGitHubRepos } from '../src/github-repos/application/ports/github.port';
+import { GitHubRepoFilter } from '../src/github-repos/domain/value-objects/github-repo-filter.vo';
+import { GitHubRepo } from '../src/github-repos/domain/entities/github-repo.entity';
 
-describe('GithubReposController (e2e)', () => {
+// In-memory test double that mirrors the original stub data
+const STUB_REPOS = [
+  new GitHubRepo(1, 'nestjs/nest', 'NestJS framework', 'TypeScript', 68000, 7600, new Date('2017-02-04'), new Date('2026-03-30'), 'https://github.com/nestjs/nest'),
+  new GitHubRepo(2, 'facebook/react', 'React library', 'TypeScript', 225000, 46000, new Date('2013-05-24'), new Date('2026-03-28'), 'https://github.com/facebook/react'),
+  new GitHubRepo(3, 'microsoft/TypeScript', 'TypeScript language', 'TypeScript', 101000, 12500, new Date('2014-06-19'), new Date('2026-04-01'), 'https://github.com/microsoft/TypeScript'),
+  new GitHubRepo(4, 'vuejs/vue', 'Vue.js framework', 'JavaScript', 207000, 33500, new Date('2013-07-29'), new Date('2026-02-10'), 'https://github.com/vuejs/vue'),
+  new GitHubRepo(5, 'expressjs/express', 'Express framework', 'JavaScript', 65000, 15000, new Date('2009-06-26'), new Date('2024-11-01'), 'https://github.com/expressjs/express'),
+  new GitHubRepo(6, 'django/django', 'Django framework', 'Python', 81000, 31500, new Date('2012-04-28'), new Date('2026-03-25'), 'https://github.com/django/django'),
+  new GitHubRepo(7, 'tiangolo/fastapi', 'FastAPI framework', 'Python', 79000, 6700, new Date('2018-12-08'), new Date('2026-03-15'), 'https://github.com/tiangolo/fastapi'),
+  new GitHubRepo(8, 'golang/go', 'Go language', 'Go', 125000, 17800, new Date('2014-08-19'), new Date('2026-04-02'), 'https://github.com/golang/go'),
+];
+
+class E2EGitHubRepositoryAdapter implements GitHubPort {
+  async search(filter: GitHubRepoFilter): Promise<PaginatedGitHubRepos> {
+    let results = [...STUB_REPOS];
+
+    if (filter.language) {
+      const lang = filter.language.toLowerCase();
+      results = results.filter((r) => r.language?.toLowerCase() === lang);
+    }
+    if (filter.createdAfter) {
+      results = results.filter((r) => r.createdAt >= filter.createdAfter!);
+    }
+
+    const total = results.length;
+    const start = (filter.page - 1) * filter.perPage;
+    return { items: results.slice(start, start + filter.perPage), total, page: filter.page, perPage: filter.perPage };
+  }
+}
+
+describe('GitHubReposController (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(GITHUB_PORT)
+      .useClass(E2EGitHubRepositoryAdapter)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(
