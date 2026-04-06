@@ -2,14 +2,14 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiBadRequestResponse, ApiTags } from '@nestjs/swagger';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { PaginatedRepositoriesResponseDto } from './dto/paginated-response.dto';
-import { RepositoryResponseDto, ScoreBreakdownDto } from './dto/repository-response.dto';
-import { SearchRepositoriesUseCase } from './application/use-cases/search-repositories.use-case';
-import { IScoredRepository } from './domain/entities/scored-repository.entity';
+import { RepositoryResponseDto } from './dto/repository-response.dto';
+import { SearchGitHubReposUseCase } from './application/use-cases/search-github-repos.use-case';
+import { ScoredGitHubRepo } from './domain/entities/scored-github-repo.entity';
 
 @ApiTags('github-repos')
 @Controller('github-repos')
-export class GithubReposController {
-  constructor(private readonly searchRepositoriesUseCase: SearchRepositoriesUseCase) {}
+export class GitHubReposController {
+  constructor(private readonly searchRepositoriesUseCase: SearchGitHubReposUseCase) {}
 
   @Get('search')
   @ApiOperation({ summary: 'Search and score GitHub repositories' })
@@ -30,30 +30,19 @@ export class GithubReposController {
       meta: {
         total: result.total,
         page: result.page,
-        perPage: result.perPage,
-        totalPages,
+        per_page: result.perPage,
+        total_pages: totalPages,
       },
     };
   }
 
-  private toRepositoryResponseDto(scored: IScoredRepository): RepositoryResponseDto {
-    const { repository, score, breakdown } = scored;
+  private toRepositoryResponseDto(scored: ScoredGitHubRepo): RepositoryResponseDto {
+    const { repository, score } = scored;
     const dto = new RepositoryResponseDto();
-    dto.id = repository.id;
-    dto.fullName = repository.fullName;
-    dto.description = repository.description;
     dto.language = repository.language;
-    dto.stars = repository.stars;
-    dto.forks = repository.forks;
-    dto.createdAt = repository.createdAt.toISOString();
-    dto.updatedAt = repository.updatedAt.toISOString();
-    dto.htmlUrl = repository.htmlUrl;
+    dto.url = repository.htmlUrl;
     dto.score = score;
-    const breakdownDto = new ScoreBreakdownDto();
-    breakdownDto.starsScore = breakdown.starsScore;
-    breakdownDto.forksScore = breakdown.forksScore;
-    breakdownDto.recencyScore = breakdown.recencyScore;
-    dto.breakdown = breakdownDto;
+    dto.created_at = repository.createdAt.toISOString();
     return dto;
   }
 }

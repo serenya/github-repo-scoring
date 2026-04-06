@@ -1,33 +1,33 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { SearchRepositoriesUseCase } from './search-repositories.use-case';
-import { GITHUB_REPOSITORY_PORT, IGithubRepositoryPort, IPaginatedRepositories } from '../ports/github-repository.port';
-import { IRepository, Repository } from '../../domain/entities/repository.entity';
+import { SearchGitHubReposUseCase } from './search-github-repos.use-case';
+import { GITHUB_PORT, GitHubPort, PaginatedGitHubRepos } from '../ports/github.port';
+import { GitHubRepo } from '../../domain/entities/github-repo.entity';
 
 const NOW = new Date('2026-04-05T00:00:00.000Z');
 
-function makeRepo(id: number, stars: number, updatedAt: Date = NOW): IRepository {
-  return new Repository(id, `owner/repo${id}`, null, 'TypeScript', stars, 0, new Date('2020-01-01'), updatedAt, `https://github.com/owner/repo${id}`);
+function makeRepo(id: number, stars: number, updatedAt: Date = NOW): GitHubRepo {
+  return new GitHubRepo(id, `owner/repo${id}`, null, 'TypeScript', stars, 0, new Date('2020-01-01'), updatedAt, `https://github.com/owner/repo${id}`);
 }
 
-describe('SearchRepositoriesUseCase', () => {
-  let useCase: SearchRepositoriesUseCase;
-  let mockPort: jest.Mocked<IGithubRepositoryPort>;
+describe('SearchGitHubReposUseCase', () => {
+  let useCase: SearchGitHubReposUseCase;
+  let mockPort: jest.Mocked<GitHubPort>;
 
   beforeEach(async () => {
     mockPort = { search: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        SearchRepositoriesUseCase,
-        { provide: GITHUB_REPOSITORY_PORT, useValue: mockPort },
+        SearchGitHubReposUseCase,
+        { provide: GITHUB_PORT, useValue: mockPort },
       ],
     }).compile();
 
-    useCase = module.get(SearchRepositoriesUseCase);
+    useCase = module.get(SearchGitHubReposUseCase);
   });
 
   it('returns repos sorted by score descending', async () => {
-    const repos: IRepository[] = [
+    const repos: GitHubRepo[] = [
       makeRepo(1, 100),    // lower stars
       makeRepo(2, 50_000), // higher stars
       makeRepo(3, 1_000),  // mid stars
@@ -55,7 +55,7 @@ describe('SearchRepositoriesUseCase', () => {
   });
 
   it('passes through pagination metadata from the port', async () => {
-    const paginatedResult: IPaginatedRepositories = { items: [], total: 42, page: 3, perPage: 5 };
+    const paginatedResult: PaginatedGitHubRepos = { items: [], total: 42, page: 3, perPage: 5 };
     mockPort.search.mockResolvedValue(paginatedResult);
 
     const result = await useCase.execute({ language: null, createdAfter: null, page: 3, perPage: 5 });

@@ -9,10 +9,10 @@ export class PaginationMetaDto {
   page: number;
 
   @ApiProperty({ description: 'Items per page', example: 10 })
-  perPage: number;
+  per_page: number;
 
   @ApiProperty({ description: 'Total number of pages', example: 1 })
-  totalPages: number;
+  total_pages: number;
 }
 
 export class PaginatedRepositoriesResponseDto {

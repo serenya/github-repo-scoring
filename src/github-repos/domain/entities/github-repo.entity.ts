@@ -1,16 +1,4 @@
-export interface IRepository {
-  id: number;
-  fullName: string;
-  description: string | null;
-  language: string | null;
-  stars: number;
-  forks: number;
-  createdAt: Date;
-  updatedAt: Date;
-  htmlUrl: string;
-}
-
-export class Repository implements IRepository {
+export class GitHubRepo {
   constructor(
     public readonly id: number,
     public readonly fullName: string,
