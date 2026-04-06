@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { GatewayTimeoutException, InternalServerErrorException, ServiceUnavailableException } from '@nestjs/common';
+import { BadGatewayException, GatewayTimeoutException, ServiceUnavailableException } from '@nestjs/common';
 import { GitHubApiAdapter } from './github-api.adapter';
 import { GitHubRepoFilter } from '../../domain/value-objects/github-repo-filter.vo';
 import { APP_CONFIG } from '../../../config/app.config';
@@ -178,11 +178,22 @@ describe('GitHubApiAdapter', () => {
       );
     });
 
-    it('throws InternalServerErrorException on other non-ok response', async () => {
+    it('throws BadGatewayException on other non-ok response', async () => {
       mockFetch.mockResolvedValueOnce({ ok: false, status: 500, statusText: 'Internal Server Error' });
 
       await expect(adapter.search(new GitHubRepoFilter(null, null, 1, 10))).rejects.toThrow(
-        InternalServerErrorException,
+        BadGatewayException,
+      );
+    });
+
+    it('throws BadGatewayException when the response body is not valid JSON', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockRejectedValueOnce(new SyntaxError('Unexpected token')),
+      });
+
+      await expect(adapter.search(new GitHubRepoFilter(null, null, 1, 10))).rejects.toThrow(
+        BadGatewayException,
       );
     });
   });

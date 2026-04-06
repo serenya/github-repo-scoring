@@ -1,4 +1,4 @@
-import { GatewayTimeoutException, Inject, Injectable, InternalServerErrorException, ServiceUnavailableException } from '@nestjs/common';
+import { BadGatewayException, GatewayTimeoutException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { GitHubPort, PaginatedGitHubRepos } from '../../application/ports/github.port';
 import { GitHubRepoFilter } from '../../domain/value-objects/github-repo-filter.vo';
 import { GitHubRepo } from '../../domain/entities/github-repo.entity';
@@ -76,12 +76,17 @@ export class GitHubApiAdapter implements GitHubPort {
       if (response.status === 403) {
         throw new ServiceUnavailableException('GitHub API rate limit exceeded');
       }
-      throw new InternalServerErrorException(
+      throw new BadGatewayException(
         `GitHub API error: ${response.status} ${response.statusText}`,
       );
     }
 
-    const data = (await response.json()) as GitHubSearchResponse;
+    let data: GitHubSearchResponse;
+    try {
+      data = (await response.json()) as GitHubSearchResponse;
+    } catch {
+      throw new BadGatewayException('GitHub API returned an invalid response');
+    }
 
     return {
       items: data.items.map((item) => this.mapToEntity(item)),
