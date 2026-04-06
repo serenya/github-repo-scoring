@@ -108,6 +108,16 @@ paths:
                 statusCode: 503
                 message: GitHub API is unavailable
                 error: Service Unavailable
+        '502':
+          description: GitHub API returned an unexpected or malformed response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 502
+                message: GitHub API returned an invalid response
+                error: Bad Gateway
         '504':
           description: GitHub API did not respond within the configured timeout
           content:
@@ -118,6 +128,16 @@ paths:
                 statusCode: 504
                 message: GitHub API request timed out
                 error: Gateway Timeout
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 500
+                message: Internal server error
+                error: Internal Server Error
 
 components:
   schemas:
