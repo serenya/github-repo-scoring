@@ -63,28 +63,28 @@ describe('GitHubReposController', () => {
     const response = await controller.search(query);
 
     expect(response.items).toHaveLength(1);
-    expect(response.items[0].id).toBe(1);
+    expect(response.items[0].url).toBe('https://github.com/owner/repo1');
     expect(response.items[0].score).toBe(75);
-    expect(response.items[0].breakdown.starsScore).toBe(50);
-    expect(response.items[0].createdAt).toBe('2020-01-01T00:00:00.000Z');
+    expect(response.items[0].language).toBe('TypeScript');
+    expect(response.items[0].created_at).toBe('2020-01-01T00:00:00.000Z');
   });
 
-  it('computes totalPages correctly', async () => {
+  it('computes total_pages correctly', async () => {
     const items = [makeScoredRepo(1, 80), makeScoredRepo(2, 70)];
     mockUseCase.execute.mockResolvedValue({ items, total: 8, page: 1, perPage: 3 });
 
     const query = Object.assign(new SearchQueryDto(), { page: 1, per_page: 3 });
     const response = await controller.search(query);
 
-    expect(response.meta.totalPages).toBe(3);
+    expect(response.meta.total_pages).toBe(3);
   });
 
-  it('returns totalPages=0 when total is 0', async () => {
+  it('returns total_pages=0 when total is 0', async () => {
     mockUseCase.execute.mockResolvedValue({ items: [], total: 0, page: 1, perPage: 10 });
 
     const query = Object.assign(new SearchQueryDto(), { page: 1, per_page: 10 });
     const response = await controller.search(query);
 
-    expect(response.meta.totalPages).toBe(0);
+    expect(response.meta.total_pages).toBe(0);
   });
 });
