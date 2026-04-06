@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SearchGitHubReposUseCase } from './search-github-repos.use-case';
 import { GITHUB_PORT, GitHubPort, PaginatedGitHubRepos } from '../ports/github.port';
 import { GitHubRepo } from '../../domain/entities/github-repo.entity';
+import { ScoringService } from '../../domain/services/scoring.service';
 
 const NOW = new Date('2026-04-05T00:00:00.000Z');
 
@@ -19,6 +20,7 @@ describe('SearchGitHubReposUseCase', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SearchGitHubReposUseCase,
+        ScoringService,
         { provide: GITHUB_PORT, useValue: mockPort },
       ],
     }).compile();
