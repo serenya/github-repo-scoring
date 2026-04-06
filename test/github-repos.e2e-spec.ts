@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { GatewayTimeoutException, INestApplication, ServiceUnavailableException, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
@@ -37,23 +37,28 @@ class E2EGitHubRepositoryAdapter implements GitHubPort {
   }
 }
 
+async function createApp(adapter: GitHubPort): Promise<INestApplication<App>> {
+  const moduleFixture: TestingModule = await Test.createTestingModule({
+    imports: [AppModule],
+  })
+    .overrideProvider(GITHUB_PORT)
+    .useValue(adapter)
+    .compile();
+
+  const app = moduleFixture.createNestApplication();
+  app.setGlobalPrefix('api/v1');
+  app.useGlobalPipes(
+    new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }),
+  );
+  await app.init();
+  return app;
+}
+
 describe('GitHubReposController (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    })
-      .overrideProvider(GITHUB_PORT)
-      .useClass(E2EGitHubRepositoryAdapter)
-      .compile();
-
-    app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api/v1');
-    app.useGlobalPipes(
-      new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }),
-    );
-    await app.init();
+    app = await createApp(new E2EGitHubRepositoryAdapter());
   });
 
   afterEach(async () => {
@@ -68,6 +73,19 @@ describe('GitHubReposController (e2e)', () => {
       expect(res.body.meta.total).toBe(8);
       expect(res.body.meta.page).toBe(1);
       expect(res.body.meta.per_page).toBe(10);
+    });
+
+    it('response includes HATEOAS links', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/github-repos/search?page=1&per_page=3')
+        .expect(200);
+
+      expect(res.body.links).toBeDefined();
+      expect(res.body.links.self).toContain('page=1');
+      expect(res.body.links.first).toContain('page=1');
+      expect(res.body.links.next).toContain('page=2');
+      expect(res.body.links.last).toContain('page=3');
+      expect(res.body.links.prev).toBeNull();
     });
 
     it('returns repos sorted by score descending', async () => {
@@ -147,5 +165,41 @@ describe('GitHubReposController (e2e)', () => {
     it('returns 400 for an invalid created_after date', async () => {
       await request(app.getHttpServer()).get('/api/v1/github-repos/search?created_after=not-a-date').expect(400);
     });
+  });
+});
+
+describe('GitHubReposController (e2e) - GitHub API unavailable', () => {
+  let app: INestApplication<App>;
+
+  beforeEach(async () => {
+    app = await createApp({
+      search: async () => { throw new ServiceUnavailableException('GitHub API is unavailable'); },
+    });
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('returns 503 when GitHub API is unreachable', async () => {
+    await request(app.getHttpServer()).get('/api/v1/github-repos/search').expect(503);
+  });
+});
+
+describe('GitHubReposController (e2e) - GitHub API timeout', () => {
+  let app: INestApplication<App>;
+
+  beforeEach(async () => {
+    app = await createApp({
+      search: async () => { throw new GatewayTimeoutException('GitHub API request timed out'); },
+    });
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('returns 504 when GitHub API times out', async () => {
+    await request(app.getHttpServer()).get('/api/v1/github-repos/search').expect(504);
   });
 });

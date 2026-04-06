@@ -1,4 +1,4 @@
-import { Inject, Injectable, InternalServerErrorException, RequestTimeoutException, ServiceUnavailableException } from '@nestjs/common';
+import { GatewayTimeoutException, Inject, Injectable, InternalServerErrorException, ServiceUnavailableException } from '@nestjs/common';
 import { GitHubPort, PaginatedGitHubRepos } from '../../application/ports/github.port';
 import { GitHubRepoFilter } from '../../domain/value-objects/github-repo-filter.vo';
 import { GitHubRepo } from '../../domain/entities/github-repo.entity';
@@ -67,9 +67,9 @@ export class GitHubApiAdapter implements GitHubPort {
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'TimeoutError') {
-        throw new RequestTimeoutException('GitHub API request timed out');
+        throw new GatewayTimeoutException('GitHub API request timed out');
       }
-      throw new InternalServerErrorException(`GitHub API error: ${String(error)}`);
+      throw new ServiceUnavailableException('GitHub API is unavailable');
     }
 
     if (!response.ok) {

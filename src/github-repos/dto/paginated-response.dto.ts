@@ -15,10 +15,30 @@ export class PaginationMetaDto {
   total_pages: number;
 }
 
+export class PaginationLinksDto {
+  @ApiProperty({ description: 'URL of the current page' })
+  self: string;
+
+  @ApiProperty({ description: 'URL of the first page' })
+  first: string;
+
+  @ApiProperty({ description: 'URL of the last page, or null when there are no results', nullable: true })
+  last: string | null;
+
+  @ApiProperty({ description: 'URL of the next page, or null when on the last page', nullable: true })
+  next: string | null;
+
+  @ApiProperty({ description: 'URL of the previous page, or null when on the first page', nullable: true })
+  prev: string | null;
+}
+
 export class PaginatedRepositoriesResponseDto {
   @ApiProperty({ type: [RepositoryResponseDto], description: 'Repositories sorted by score descending' })
   items: RepositoryResponseDto[];
 
   @ApiProperty({ type: PaginationMetaDto })
   meta: PaginationMetaDto;
+
+  @ApiProperty({ type: PaginationLinksDto })
+  links: PaginationLinksDto;
 }

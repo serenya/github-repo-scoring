@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { InternalServerErrorException, RequestTimeoutException, ServiceUnavailableException } from '@nestjs/common';
+import { GatewayTimeoutException, InternalServerErrorException, ServiceUnavailableException } from '@nestjs/common';
 import { GitHubApiAdapter } from './github-api.adapter';
 import { GitHubRepoFilter } from '../../domain/value-objects/github-repo-filter.vo';
 import { APP_CONFIG } from '../../../config/app.config';
@@ -153,12 +153,20 @@ describe('GitHubApiAdapter', () => {
       expect(headers['Authorization']).toBeUndefined();
     });
 
-    it('throws RequestTimeoutException on timeout', async () => {
+    it('throws GatewayTimeoutException on timeout', async () => {
       const timeoutError = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
       mockFetch.mockRejectedValueOnce(timeoutError);
 
       await expect(adapter.search(new GitHubRepoFilter(null, null, 1, 10))).rejects.toThrow(
-        RequestTimeoutException,
+        GatewayTimeoutException,
+      );
+    });
+
+    it('throws ServiceUnavailableException on network failure', async () => {
+      mockFetch.mockRejectedValueOnce(new TypeError('fetch failed'));
+
+      await expect(adapter.search(new GitHubRepoFilter(null, null, 1, 10))).rejects.toThrow(
+        ServiceUnavailableException,
       );
     });
 

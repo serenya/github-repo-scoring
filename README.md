@@ -1,98 +1,181 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# GitHub Repository Scoring
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A NestJS REST API that searches GitHub repositories and ranks them by a **popularity score** (0–100) derived from stars, forks, and recency of updates. Users can filter results by programming language and repository creation date.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Architecture
 
-## Description
+The project follows **Hexagonal (Ports & Adapters) Architecture**, keeping the domain and application layers independent of infrastructure concerns.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ pnpm install
+```
+src/
+├── config/                          # Global configuration (env vars → typed AppConfig)
+└── github-repos/
+    ├── domain/
+    │   ├── entities/                # GitHubRepo, ScoredGitHubRepo
+    │   ├── value-objects/           # GitHubRepoFilter, ScoreBreakdown
+    │   └── services/                # ScoringService
+    ├── application/
+    │   ├── ports/                   # GitHubPort, CachePort, CircuitBreakerPort
+    │   └── use-cases/               # SearchGitHubReposUseCase
+    └── infrastructure/
+        ├── adapters/
+        │   ├── github-api.adapter.ts          # Raw GitHub REST API calls
+        │   ├── caching-github.adapter.ts      # LRU cache + request deduplication
+        │   └── resilient-github.adapter.ts    # Circuit breaker wrapper
+        ├── cache/                   # InMemoryLruCache
+        └── resilience/              # CircuitBreaker
 ```
 
-## Compile and run the project
+**Adapter chain** (outermost → innermost):
+
+```
+Request → ResilientGitHubAdapter → CachingGitHubAdapter → GitHubApiAdapter → GitHub API
+```
+
+## Scoring Algorithm
+
+Each repository receives a score in the range **0–100**, computed as the arithmetic mean of three components:
+
+| Component | Formula | Reference |
+|-----------|---------|-----------|
+| **Stars** | `log10(stars + 1) / log10(100_001) × 100` | 100k stars → 100 |
+| **Forks** | `log10(forks + 1) / log10(50_001) × 100` | 50k forks → 100 |
+| **Recency** | `100 − (daysSinceUpdate / 730) × 100` | 2-year linear decay |
+
+Logarithmic scaling on stars and forks prevents mega-popular repositories from completely overshadowing others. Recency rewards actively maintained projects.
+
+## API
+
+### `GET /api/v1/github-repos/search`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `language` | string | — | Filter by programming language (e.g. `TypeScript`) |
+| `created_after` | ISO 8601 date | — | Only repos created after this date (e.g. `2020-01-01`) |
+| `page` | integer ≥ 1 | `1` | Page number |
+| `per_page` | integer 1–100 | `10` | Results per page |
+
+**Response**
+
+```json
+{
+  "items": [
+    {
+      "url": "https://github.com/owner/repo",
+      "language": "TypeScript",
+      "score": 74,
+      "created_at": "2021-03-15T10:00:00Z"
+    }
+  ],
+  "meta": {
+    "total": 1234,
+    "page": 1,
+    "per_page": 10,
+    "total_pages": 124
+  }
+}
+```
+
+Results are sorted by `score` descending. Interactive documentation is available at **`/api`** (Swagger UI).
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | HTTP server port |
+| `GITHUB_TOKEN` | — | Optional Bearer token (raises rate limit from 60 to 5,000 req/h) |
+| `GITHUB_API_BASE` | `https://api.github.com` | GitHub API base URL |
+| `GITHUB_API_VERSION` | `2026-03-10` | `X-GitHub-Api-Version` header value |
+| `GITHUB_API_TIMEOUT_MS` | `5000` | Per-request timeout in milliseconds |
+| `CACHE_TTL_MS` | `300000` | LRU cache entry TTL (5 minutes) |
+| `CACHE_MAX_ENTRIES` | `100` | Maximum entries in LRU cache |
+| `CB_FAILURE_THRESHOLD` | `5` | Consecutive failures before circuit opens |
+| `CB_HALF_OPEN_TIMEOUT_MS` | `30000` | Time in OPEN state before probing upstream |
+
+Copy `.env.example` (if present) or set variables directly in your environment.
+
+## Project Setup
+
+```bash
+pnpm install
+```
+
+## Running the App
 
 ```bash
 # development
-$ pnpm run start
+pnpm run start
 
 # watch mode
-$ pnpm run start:dev
+pnpm run start:dev
 
-# production mode
-$ pnpm run start:prod
+# production
+pnpm run start:prod
 ```
 
-## Run tests
+## Running with Docker
+
+```bash
+docker compose up --build
+```
+
+The API will be available at `http://localhost:3000`. Pass configuration via a `.env` file or the `environment` block in `docker-compose.yml` — see [Configuration](#configuration).
+
+## Tests
 
 ```bash
 # unit tests
-$ pnpm run test
+pnpm run test
 
 # e2e tests
-$ pnpm run test:e2e
+pnpm run test:e2e
 
-# test coverage
-$ pnpm run test:cov
+# coverage
+pnpm run test:cov
 ```
 
-## Deployment
+The test suite contains **37 tests** covering the scoring algorithm, adapter chain, use case orchestration, and controller mapping.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+---
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Trade-offs & Further Improvements
 
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
-```
+### Trade-offs
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+**In-process LRU cache**
+The cache lives inside the Node.js process. This is fast and has zero infrastructure dependencies, but each horizontal replica maintains its own independent cache. Under load balancing, cache hit rates drop proportionally to the number of replicas and the same GitHub queries are redundantly made across instances.
 
-## Resources
+**Single-node circuit breaker**
+Circuit breaker state is in-memory and local to each process. In a multi-replica deployment, one replica can have an open circuit while others do not, so the protective effect is diluted. There is also no shared failure signal across the fleet.
 
-Check out a few resources that may come in handy when working with NestJS:
+**Post-fetch scoring vs. pre-sorted results**
+GitHub returns search results sorted by its own relevance algorithm. Scoring and re-sorting happen client-side after fetching a single page, so a highly-scored repository on page 3 of GitHub's results will never surface on page 1 of the API response. Accurate global ranking would require fetching all pages before scoring, which is impractical at scale.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+**GitHub API rate limits**
+Without a `GITHUB_TOKEN`, unauthenticated requests are limited to 10 per minute. Even authenticated, 30 requests per minute is a hard ceiling that a high-traffic deployment will exhaust. The current architecture has no throttling or queue strategy beyond the circuit breaker.
 
-## Support
+**Pagination offset ceiling**
+GitHub's REST search API limits results to the first 1,000 items (`page × per_page ≤ 1000`). Requests beyond this limit return an error that surfaces as a 500 from this service.
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+**Scoring weight subjectivity**
+Stars, forks, and recency each contribute equally (one-third) to the final score. The log-scale reference points (100k stars, 50k forks, 2-year decay) are opinionated choices that suit general-purpose repositories but may not be appropriate for niche ecosystems where a 500-star repo is exceptional.
 
-## Stay in touch
+### Further Improvements
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+**Distributed cache (Redis)**
+Replacing `InMemoryLruCache` with a shared Redis instance eliminates cache fragmentation across replicas, reduces upstream load linearly with replica count, and survives process restarts.
 
-## License
+**Distributed circuit breaker**
+Sharing circuit breaker state via Redis or a service mesh (e.g., Istio) ensures the entire fleet reacts consistently to GitHub outages rather than each replica tripping independently.
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+**Cache warming & background refresh**
+Popular queries could be proactively refreshed in the background before TTL expiry ("stale-while-revalidate" pattern), eliminating cold-start latency after cache misses and keeping results up to date.
+
+**Configurable score weights**
+Exposing `starsWeight`, `forksWeight`, and `recencyWeight` as query parameters or a separate configuration endpoint would let consumers tune the ranking to their domain (e.g., a security-focused consumer might down-weight recency in favour of stars).
+
+**Observability**
+Structured logging, Prometheus metrics (cache hit/miss rate, circuit breaker state transitions, GitHub API latency histogram), and distributed tracing (OpenTelemetry) would make production diagnosis significantly easier.
+
+**Authentication & API keys**
+Adding API key or JWT-based authentication to this service would allow per-consumer rate limiting and usage tracking before requests ever reach GitHub.
