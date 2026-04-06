@@ -1,8 +1,18 @@
+import { Test } from '@nestjs/testing';
+import { InternalServerErrorException, RequestTimeoutException, ServiceUnavailableException } from '@nestjs/common';
 import { GitHubApiAdapter } from './github-api.adapter';
 import { GitHubRepoFilter } from '../../domain/value-objects/github-repo-filter.vo';
+import { APP_CONFIG } from '../../../config/app.config';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
+
+const mockConfig = {
+  githubApiBase: 'https://api.github.com',
+  githubApiVersion: '2026-03-10',
+  githubToken: undefined,
+  githubApiTimeoutMs: 5000,
+};
 
 function makeGitHubItem(overrides: Partial<{
   id: number; full_name: string; description: string | null; language: string | null;
@@ -31,9 +41,15 @@ function mockResponse(totalCount: number, items: ReturnType<typeof makeGitHubIte
 describe('GitHubApiAdapter', () => {
   let adapter: GitHubApiAdapter;
 
-  beforeEach(() => {
-    adapter = new GitHubApiAdapter();
+  beforeEach(async () => {
     mockFetch.mockClear();
+    const module = await Test.createTestingModule({
+      providers: [
+        GitHubApiAdapter,
+        { provide: APP_CONFIG, useValue: mockConfig },
+      ],
+    }).compile();
+    adapter = module.get(GitHubApiAdapter);
   });
 
   describe('search', () => {
@@ -112,11 +128,53 @@ describe('GitHubApiAdapter', () => {
       expect(result.perPage).toBe(10);
     });
 
-    it('throws InternalServerErrorException on non-ok response', async () => {
+    it('adds Authorization header when githubToken is configured', async () => {
+      const module = await Test.createTestingModule({
+        providers: [
+          GitHubApiAdapter,
+          { provide: APP_CONFIG, useValue: { ...mockConfig, githubToken: 'ghp_test123' } },
+        ],
+      }).compile();
+      const authenticatedAdapter = module.get(GitHubApiAdapter);
+      mockResponse(0, []);
+
+      await authenticatedAdapter.search(new GitHubRepoFilter(null, null, 1, 10));
+
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers['Authorization']).toBe('Bearer ghp_test123');
+    });
+
+    it('omits Authorization header when githubToken is not configured', async () => {
+      mockResponse(0, []);
+
+      await adapter.search(new GitHubRepoFilter(null, null, 1, 10));
+
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers['Authorization']).toBeUndefined();
+    });
+
+    it('throws RequestTimeoutException on timeout', async () => {
+      const timeoutError = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+      mockFetch.mockRejectedValueOnce(timeoutError);
+
+      await expect(adapter.search(new GitHubRepoFilter(null, null, 1, 10))).rejects.toThrow(
+        RequestTimeoutException,
+      );
+    });
+
+    it('throws ServiceUnavailableException on 403 rate limit', async () => {
       mockFetch.mockResolvedValueOnce({ ok: false, status: 403, statusText: 'Forbidden' });
 
       await expect(adapter.search(new GitHubRepoFilter(null, null, 1, 10))).rejects.toThrow(
-        'GitHub API error: 403 Forbidden',
+        ServiceUnavailableException,
+      );
+    });
+
+    it('throws InternalServerErrorException on other non-ok response', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500, statusText: 'Internal Server Error' });
+
+      await expect(adapter.search(new GitHubRepoFilter(null, null, 1, 10))).rejects.toThrow(
+        InternalServerErrorException,
       );
     });
   });

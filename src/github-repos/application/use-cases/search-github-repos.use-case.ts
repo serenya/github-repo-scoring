@@ -7,11 +7,11 @@ import { ScoringService } from '../../domain/services/scoring.service';
 
 @Injectable()
 export class SearchGitHubReposUseCase {
-  private readonly scoringService = new ScoringService();
 
   constructor(
     @Inject(GITHUB_PORT)
     private readonly repoPort: GitHubPort,
+    private readonly scoringService: ScoringService,
   ) {}
 
   async execute(input: SearchGitHubReposInput): Promise<SearchGitHubReposOutput> {
